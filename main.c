@@ -10,12 +10,87 @@ typedef struct {
 } InputBuffer;
 
 typedef enum { META_COMMAND_SUCCESS, META_COMMAND_UNRECOGNIZED_COMMAND } MetaCommandResult;
-typedef enum { PREPARE_SUCCESS, PREPARE_UNRECOGNIZED_STATEMENT } PrepareResult;
+typedef enum { PREPARE_SUCCESS, PREPARE_SYNTAX_ERROR, PREPARE_UNRECOGNIZED_STATEMENT } PrepareResult;
 typedef enum { STATEMENT_INSERT, STATEMENT_SELECT } StatementType;
+
+
+#define COLUMN_USERNAME_SIZE 32
+#define COLUMN_EMAIL_SIZE 255
+
+typedef struct {
+  uint32_t id;
+  char username[COLUMN_USERNAME_SIZE];
+  char email[COLUMN_EMAIL_SIZE];
+} Row;
 
 typedef struct {
   StatementType type;
+  Row row_to_insert;
 } Statement;
+
+// Struct*      creates pointer
+// (Struct*)0   creates a pointer initialized with a value of 0
+// Although `0` is not a valid memory address,
+// this lets you access the structs attributes using the -> operator.
+// Furthermore, I couldn't just do `Struct->Attribute` because
+// `Struct` is not an instance of the struct (it's a type).
+// So you need to initialize it somehow before trying to access its attribute.
+#define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
+
+const uint32_t ID_SIZE = size_of_attribute(Row, id);
+const uint32_t USERNAME_SIZE = size_of_attribute(Row, username);
+const uint32_t EMAIL_SIZE = size_of_attribute(Row, email);
+const uint32_t ID_OFFSET = 0;
+const uint32_t USERNAME_OFFSET = ID_OFFSET + ID_SIZE;
+const uint32_t EMAIL_OFFSET = USERNAME_OFFSET + USERNAME_SIZE;
+const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
+
+// SERIALIZE & DESERIALIZE
+// void* (void pointer) is a pointer to a generic type (any)
+// generally unsafe but typically used in serialization
+// I should still carefully type cast this at runtime
+// If `destination` were to accept 1 of 2 types, we could use:
+//   1. Function overloading ->
+//    serialize_row_int(Row* source, int* destination) or
+//    serialize_row_double(Row* source, double* destination)
+//   2. Tagged Union (Discriminated Union)
+//    typedef enum {
+//     DESTINATION_INT,
+//     DESTINATION_DOUBLE,
+//   } DestinationType;
+//
+//   typedef struct {
+//     DestinationType type;
+//     union {
+//       int* destination_int;
+//       double* destination_double;
+//     } destination
+//   } Destination;
+void serialize_row(Row* source, void* destination) {
+  // memcp copies n chars from src to dest.
+  /* void *memcpy(void *dst, const void *src, size_t n) */
+  // ^^ notice the `const void *src` syntax
+  // `const` is a hint that *src shouldn't be modified.
+  memcpy(destination + ID_OFFSET, &(source->id), ID_SIZE);
+  memcpy(destination + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
+  memcpy(destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
+}
+
+void deserialize_row(void* source, Row* destination) {
+  memcpy(&(destination->id), source + ID_OFFSET, ID_SIZE);
+  memcpy(&(destination->username), source + USERNAME_OFFSET, USERNAME_SIZE);
+  memcpy(&(destination->email), source + EMAIL_OFFSET, EMAIL_SIZE);
+}
+
+// Table structure that points to pages of rows and keeps tracks of how many rows there are in prepare_statement
+const uint32_t PAGE_SIZE = 4096;
+#define TABLE_MAX_PAGES 100
+const uint32_t ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE;
+const uint32_t TABLE_MAX_ROWS = ROWS_PER_PAGE * TABLE_MAX_PAGES;
+
+typedef struct {
+  uint32_t num_rows;
+} Table;
 
 void print_prompt() { printf("db > "); }
 
@@ -67,6 +142,16 @@ PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement)
   }
   if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
     statement->type = STATEMENT_INSERT;
+    int args_assigned = sscanf(
+      input_buffer->buffer,
+      "insert %d %s %s",
+      &(statement->row_to_insert.id),
+      &(statement->row_to_insert.username),
+      &(statement->row_to_insert.email)
+    );
+    if (args_assigned < 3) {
+      return PREPARE_SYNTAX_ERROR;
+    }
     return PREPARE_SUCCESS;
   }
 
@@ -112,6 +197,9 @@ int main(int argc, char** argv) {
       case (PREPARE_UNRECOGNIZED_STATEMENT):
         printf("Unrecognized keyword at start of '%s' .\n", input_buffer->buffer);
         continue;
+      default:
+        printf("Syntax error.");
+        break;
     }
 
     execute_statement(&statement);
