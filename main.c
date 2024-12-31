@@ -20,6 +20,9 @@ typedef enum {
 } PrepareResult;
 typedef enum { STATEMENT_INSERT, STATEMENT_SELECT } StatementType;
 
+// Called "preprocessor directives": performs text replacement before code compiles.
+// aka every instance of COLUMN_USERNAME_SIZE is replaced with 32
+// this way, it doesn't take up memory in your program; the final code is just the values
 #define COLUMN_USERNAME_SIZE 32
 #define COLUMN_EMAIL_SIZE 255
 
@@ -51,9 +54,9 @@ typedef struct {
  * */
 #define size_of_attribute(Struct, Attribute) sizeof(((Struct *)0)->Attribute)
 
-const uint32_t ID_SIZE = size_of_attribute(Row, id);
-const uint32_t USERNAME_SIZE = size_of_attribute(Row, username);
-const uint32_t EMAIL_SIZE = size_of_attribute(Row, email);
+const uint32_t ID_SIZE = size_of_attribute(Row, id);             // 4 bytes
+const uint32_t USERNAME_SIZE = size_of_attribute(Row, username); // 32 bytes
+const uint32_t EMAIL_SIZE = size_of_attribute(Row, email);       // 255 bytes
 const uint32_t ID_OFFSET = 0;
 const uint32_t USERNAME_OFFSET = ID_OFFSET + ID_SIZE;
 const uint32_t EMAIL_OFFSET = USERNAME_OFFSET + USERNAME_SIZE;
