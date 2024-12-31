@@ -10,6 +10,7 @@ typedef struct {
   ssize_t input_length;
 } InputBuffer;
 
+typedef enum { EXECUTE_SUCCESS, EXECUTE_TABLE_FULL } ExecuteResult;
 typedef enum {
   META_COMMAND_SUCCESS,
   META_COMMAND_UNRECOGNIZED_COMMAND
@@ -65,32 +66,12 @@ const uint32_t EMAIL_OFFSET = USERNAME_OFFSET + USERNAME_SIZE;
 const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
 
 /*
- * SERIALIZE & DESERIALIZE
+ * Serialization is the process of converting a data structure
+ * (in this case a Row struct) into a format that can be stored
+ * or transmitted (a contiguous memory block)
  *
- * void* (void pointer) is a pointer to a generic type (any)
- * generally unsafe but typically used in serialization
- *
- * I should still carefully type cast this at runtime
- *
- * If `destination` were to accept 1 of 2 types, we could use:
- *   1. (Struct*)0    creates a NULL pointer. By casting a 0 to a function
- *     overloading ->
- *     serialize_row_int(Row* source, int* destination) or
- *     serialize_row_double(Row* source, double* destination)
- *
- *   2. Tagged Union (Discriminated Union)
- *     typedef enum {
- *       DESTINATION_INT,
- *       DESTINATION_DOUBLE,
- *     } DestinationType;
- *
- *     typedef struct {
- *       DestinationType type;
- *       union {
- *         int* destination_int;
- *         double* destination_double;
- *       } destination
- *     } Destination;
+ * Each memcpy call copies the specific Row instance's field to a predetermined
+ * location in the destination memory block
  */
 void serialize_row(Row *source, void *destination) {
   /*
@@ -99,7 +80,6 @@ void serialize_row(Row *source, void *destination) {
    * void *memcpy(void *dst, const void *src, size_t n)
    * ^^ notice the `const void *src` syntax
    * `const` is a hint that *src shouldn't be modified.
-   *
    *
    * memcpy(destination address, source address to copy bytes from, number of
    * bytes to copy)
@@ -203,7 +183,7 @@ PrepareResult prepare_statement(InputBuffer *input_buffer,
 }
 
 // Figures out where to read/write a particular row in memory
-void *read_slot(Table *table, uint32_t row_num) {
+void *row_slot(Table *table, uint32_t row_num) {
   // Calculate which page contains this row
   uint32_t page_num = row_num / ROWS_PER_PAGE;
 
@@ -225,8 +205,8 @@ void *read_slot(Table *table, uint32_t row_num) {
    * if row_num is 15, % 10 = 5 (fifth position in next page)
    * if row_num is 25, % 10 = 5 (fifth position in third page)
    *
-   * So row_position_in_page always gives you the row's position within its specific page,
-   * regardless of which page it's on.
+   * So row_position_in_page always gives you the row's position within its
+   * specific page, regardless of which page it's on.
    */
   uint32_t row_position_in_page = row_num % ROWS_PER_PAGE;
 
@@ -235,6 +215,19 @@ void *read_slot(Table *table, uint32_t row_num) {
   void *row_location = page_start + (row_position_in_page * ROW_SIZE);
 
   return row_location;
+}
+
+ExecuteResult execute_insert(Statement *statement, Table *table) {
+  if (table->num_rows >= TABLE_MAX_ROWS) {
+    return EXECUTE_TABLE_FULL;
+  }
+
+  Row *row_to_insert = &(statement->row_to_insert);
+
+  serialize_row(row_to_insert, row_slot(table, table->num_rows));
+  table->num_rows += 1;
+
+  return EXECUTE_SUCCESS;
 }
 
 void execute_statement(Statement *statement) {
