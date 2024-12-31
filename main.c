@@ -94,6 +94,13 @@ typedef struct {
 
 void print_prompt() { printf("db > "); }
 
+void remove_newline(InputBuffer* input_buffer, ssize_t bytes_read) {
+  // removes the \n newline char after processing the input from the repl.
+  // removes it from total length and deletes the \n character by replacing w 0.
+  input_buffer->input_length = bytes_read - 1;
+  input_buffer ->buffer[bytes_read -1] = 0;
+}
+
 void read_input(InputBuffer* input_buffer) {
   // getline reads a line from stream (in this case stdin)
   ssize_t bytes_read =
@@ -104,9 +111,7 @@ void read_input(InputBuffer* input_buffer) {
       exit(EXIT_FAILURE);
     }
 
-   // ignore trailing new line
-   input_buffer->input_length = bytes_read - 1;
-   input_buffer->buffer[bytes_read - 1] = 0;
+  remove_newline(input_buffer, bytes_read);
 }
 
 void close_input_buffer(InputBuffer* input_buffer) {
