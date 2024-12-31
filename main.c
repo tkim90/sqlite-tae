@@ -91,7 +91,8 @@ void serialize_row(Row *row_byte_address, void *row_location_in_page) {
 
   memcpy(row_location_in_page + USERNAME_OFFSET, &(row_byte_address->username),
          USERNAME_SIZE);
-  memcpy(row_location_in_page + EMAIL_OFFSET, &(row_byte_address->email), EMAIL_SIZE);
+  memcpy(row_location_in_page + EMAIL_OFFSET, &(row_byte_address->email),
+         EMAIL_SIZE);
 }
 
 /*
@@ -101,8 +102,10 @@ void serialize_row(Row *row_byte_address, void *row_location_in_page) {
  */
 void deserialize_row(void *row_byte_address, Row *row_location_in_page) {
   memcpy(&(row_location_in_page->id), row_byte_address + ID_OFFSET, ID_SIZE);
-  memcpy(&(row_location_in_page->username), row_byte_address + USERNAME_OFFSET, USERNAME_SIZE);
-  memcpy(&(row_location_in_page->email), row_byte_address + EMAIL_OFFSET, EMAIL_SIZE);
+  memcpy(&(row_location_in_page->username), row_byte_address + USERNAME_OFFSET,
+         USERNAME_SIZE);
+  memcpy(&(row_location_in_page->email), row_byte_address + EMAIL_OFFSET,
+         EMAIL_SIZE);
 }
 
 // Table structure that points to pages of rows and keeps tracks of how many
@@ -192,6 +195,30 @@ PrepareResult prepare_statement(InputBuffer *input_buffer,
   return PREPARE_UNRECOGNIZED_STATEMENT;
 }
 
+Table *new_table() {
+  // allocate memory and cast Table pointer
+  //
+  // Explanation:
+  // malloc returns a generic pointer void*
+  // so `(Table*)malloc(sizeof(Table))` is saying,
+  // "the pointer of that address that we just allocated is of type Table"
+  Table *table = (Table *)malloc(sizeof(Table));
+
+  table->num_rows = 0;
+
+  // defensive programming:
+  // apparently good practice in C to instantiate null pointers
+  // bc it can end up being filled with whatever random memory values present in
+  // that memory location
+  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+    table->pages[i] = NULL;
+  }
+  return table;
+}
+
+// cleanup table
+void free_table() {}
+
 // Figures out where to read/write a particular row in memory
 void *get_row_location(Table *table, uint32_t row_num) {
   // Calculate which page contains this row
@@ -240,25 +267,31 @@ ExecuteResult execute_insert(Statement *statement, Table *table) {
   return EXECUTE_SUCCESS;
 }
 
-ExecuteResult execute_select(Statement *statement, Table *table) {
-  Row row;
-  for (uint32_t i = 0; i < table->num_rows; i++) {
-    deserialize_row(get_row_location(table, i), &row);
-  }
+void print_row(Row *row) {
+  printf("(%d, %s, %s)\n", row->id, row->username, row->email);
 }
 
-void execute_statement(Statement *statement) {
+// print every row
+ExecuteResult execute_select(Statement *statement, Table *table) {
+  Row row;
+  for (uint32_t row_num = 0; row_num < table->num_rows; row_num++) {
+    deserialize_row(get_row_location(table, row_num), &row);
+    print_row(&row);
+  }
+  return EXECUTE_SUCCESS;
+}
+
+ExecuteResult execute_statement(Statement *statement, Table *table) {
   switch (statement->type) {
   case (STATEMENT_SELECT):
-    printf("Selecting from database...\n");
-    break;
+    return execute_select(statement, table);
   case (STATEMENT_INSERT):
-    printf("Inserting to database...\n");
-    break;
+    return execute_insert(statement, table);
   }
 }
 
 int main(int argc, char **argv) {
+  Table *table = new_table();
   InputBuffer *input_buffer = new_input_buffer();
 
   // REPL
@@ -291,7 +324,7 @@ int main(int argc, char **argv) {
       break;
     }
 
-    execute_statement(&statement);
+    execute_statement(&statement, table);
     printf("Executed.\n");
   }
 }
