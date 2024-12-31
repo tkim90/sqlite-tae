@@ -73,7 +73,7 @@ const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
  * Each memcpy call copies the specific Row instance's field to a predetermined
  * location in the destination memory block
  */
-void serialize_row(Row *source, void *row_location_in_page) {
+void serialize_row(Row *row_byte_address, void *row_location_in_page) {
   /*
    * memcp copies n chars from src to dest.
    *
@@ -86,18 +86,23 @@ void serialize_row(Row *source, void *row_location_in_page) {
    */
 
   // being painfully explicity here
-  uint32_t *row_id_position = (uint32_t*)(row_location_in_page + ID_OFFSET);
-  memcpy(row_id_position, &(source->id), ID_SIZE);
+  uint32_t *row_id_position = (uint32_t *)(row_location_in_page + ID_OFFSET);
+  memcpy(row_id_position, &(row_byte_address->id), ID_SIZE);
 
-  memcpy(row_location_in_page + USERNAME_OFFSET, &(source->username),
+  memcpy(row_location_in_page + USERNAME_OFFSET, &(row_byte_address->username),
          USERNAME_SIZE);
-  memcpy(row_location_in_page + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
+  memcpy(row_location_in_page + EMAIL_OFFSET, &(row_byte_address->email), EMAIL_SIZE);
 }
 
-void deserialize_row(void *source, Row *destination) {
-  memcpy(&(destination->id), source + ID_OFFSET, ID_SIZE);
-  memcpy(&(destination->username), source + USERNAME_OFFSET, USERNAME_SIZE);
-  memcpy(&(destination->email), source + EMAIL_OFFSET, EMAIL_SIZE);
+/*
+ * Reverses the serialization process by copying bytes from a memory block
+ * back into a structured Row object, using predefined offsets to locate
+ * each field's original position in the sorted memory block
+ */
+void deserialize_row(void *row_byte_address, Row *row_location_in_page) {
+  memcpy(&(row_location_in_page->id), row_byte_address + ID_OFFSET, ID_SIZE);
+  memcpy(&(row_location_in_page->username), row_byte_address + USERNAME_OFFSET, USERNAME_SIZE);
+  memcpy(&(row_location_in_page->email), row_byte_address + EMAIL_OFFSET, EMAIL_SIZE);
 }
 
 // Table structure that points to pages of rows and keeps tracks of how many
@@ -233,6 +238,13 @@ ExecuteResult execute_insert(Statement *statement, Table *table) {
   table->num_rows += 1;
 
   return EXECUTE_SUCCESS;
+}
+
+ExecuteResult execute_select(Statement *statement, Table *table) {
+  Row row;
+  for (uint32_t i = 0; i < table->num_rows; i++) {
+    deserialize_row(get_row_location(table, i), &row);
+  }
 }
 
 void execute_statement(Statement *statement) {
