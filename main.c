@@ -34,13 +34,21 @@ typedef struct {
   Row row_to_insert;
 } Statement;
 
-// Struct*      creates pointer
-// (Struct*)0   creates a pointer initialized with a value of 0
-// Although `0` is not a valid memory address,
-// this lets you access the structs attributes using the -> operator.
-// Furthermore, I couldn't just do `Struct->Attribute` because
-// `Struct` is not an instance of the struct (it's a type).
-// So you need to initialize it somehow before trying to access its attribute.
+/*
+ * TLDR: this is a utility macro to get the byte size of a specific attribute
+ * within struct without needing to create an actual instance of the struct.
+ *
+ * "hey compiler, if this were a real Struct pointer, I want to access
+ * Attribute"
+ *
+ * Breakdown:
+ * - Struct*                    creates a pointer
+ * - (Struct*)0                 creates a NULL pointer by casting a 0, since 0
+ * is not a valid memory address
+ * - ((Struct *)0)->Attribute   gets the Attribute type info from Struct through
+ * a NULL pointer
+ *
+ * */
 #define size_of_attribute(Struct, Attribute) sizeof(((Struct *)0)->Attribute)
 
 const uint32_t ID_SIZE = size_of_attribute(Row, id);
@@ -56,7 +64,8 @@ const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
 // generally unsafe but typically used in serialization
 // I should still carefully type cast this at runtime
 // If `destination` were to accept 1 of 2 types, we could use:
-//   1. Function overloading ->
+//   1. - (Struct*)0    creates a NULL pointer. By casting a 0 t Function
+//   overloading ->
 //    serialize_row_int(Row* source, int* destination) or
 //    serialize_row_double(Row* source, double* destination)
 //   2. Tagged Union (Discriminated Union)
@@ -150,17 +159,17 @@ MetaCommandResult do_meta_command(InputBuffer *input_buffer) {
   return META_COMMAND_UNRECOGNIZED_COMMAND;
 }
 
-PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *statement) {
+PrepareResult prepare_statement(InputBuffer *input_buffer,
+                                Statement *statement) {
   if (strcmp(input_buffer->buffer, "select") == 0) {
     statement->type = STATEMENT_SELECT;
     return PREPARE_SUCCESS;
   }
   if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
     statement->type = STATEMENT_INSERT;
-    int args_assigned = sscanf(input_buffer->buffer, "insert %d %s %s",
-                               &(statement->row_to_insert.id),
-                               statement->row_to_insert.username,
-                               statement->row_to_insert.email);
+    int args_assigned = sscanf(
+        input_buffer->buffer, "insert %d %s %s", &(statement->row_to_insert.id),
+        statement->row_to_insert.username, statement->row_to_insert.email);
     if (args_assigned < 3) {
       return PREPARE_SYNTAX_ERROR;
     }
