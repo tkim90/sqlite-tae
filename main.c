@@ -183,7 +183,8 @@ int main(int argc, char** argv) {
     read_input(input_buffer);
 
     // is valid meta command?
-    if (input_buffer->buffer[0] == '.') {
+    bool is_valid_meta_command = input_buffer->buffer[0] == '.';
+    if (is_valid_meta_command) {
       switch (do_meta_command(input_buffer)) {
         case (META_COMMAND_SUCCESS):
           continue;
