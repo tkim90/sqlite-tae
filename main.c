@@ -73,7 +73,7 @@ const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
  * Each memcpy call copies the specific Row instance's field to a predetermined
  * location in the destination memory block
  */
-void serialize_row(Row *source, void *destination) {
+void serialize_row(Row *source, void *row_location_in_page) {
   /*
    * memcp copies n chars from src to dest.
    *
@@ -84,9 +84,14 @@ void serialize_row(Row *source, void *destination) {
    * memcpy(destination address, source address to copy bytes from, number of
    * bytes to copy)
    */
-  memcpy(destination + ID_OFFSET, &(source->id), ID_SIZE);
-  memcpy(destination + USERNAME_OFFSET, &(source->username), USERNAME_SIZE);
-  memcpy(destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
+
+  // being painfully explicity here
+  uint32_t *row_id_position = (uint32_t*)(row_location_in_page + ID_OFFSET);
+  memcpy(row_id_position, &(source->id), ID_SIZE);
+
+  memcpy(row_location_in_page + USERNAME_OFFSET, &(source->username),
+         USERNAME_SIZE);
+  memcpy(row_location_in_page + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
 }
 
 void deserialize_row(void *source, Row *destination) {
