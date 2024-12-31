@@ -1,18 +1,24 @@
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <stdbool.h>
 
 typedef struct {
-  char* buffer;
+  char *buffer;
   size_t buffer_length;
   ssize_t input_length;
 } InputBuffer;
 
-typedef enum { META_COMMAND_SUCCESS, META_COMMAND_UNRECOGNIZED_COMMAND } MetaCommandResult;
-typedef enum { PREPARE_SUCCESS, PREPARE_SYNTAX_ERROR, PREPARE_UNRECOGNIZED_STATEMENT } PrepareResult;
+typedef enum {
+  META_COMMAND_SUCCESS,
+  META_COMMAND_UNRECOGNIZED_COMMAND
+} MetaCommandResult;
+typedef enum {
+  PREPARE_SUCCESS,
+  PREPARE_SYNTAX_ERROR,
+  PREPARE_UNRECOGNIZED_STATEMENT
+} PrepareResult;
 typedef enum { STATEMENT_INSERT, STATEMENT_SELECT } StatementType;
-
 
 #define COLUMN_USERNAME_SIZE 32
 #define COLUMN_EMAIL_SIZE 255
@@ -35,7 +41,7 @@ typedef struct {
 // Furthermore, I couldn't just do `Struct->Attribute` because
 // `Struct` is not an instance of the struct (it's a type).
 // So you need to initialize it somehow before trying to access its attribute.
-#define size_of_attribute(Struct, Attribute) sizeof(((Struct*)0)->Attribute)
+#define size_of_attribute(Struct, Attribute) sizeof(((Struct *)0)->Attribute)
 
 const uint32_t ID_SIZE = size_of_attribute(Row, id);
 const uint32_t USERNAME_SIZE = size_of_attribute(Row, username);
@@ -66,7 +72,7 @@ const uint32_t ROW_SIZE = ID_SIZE + USERNAME_SIZE + EMAIL_SIZE;
 //       double* destination_double;
 //     } destination
 //   } Destination;
-void serialize_row(Row* source, void* destination) {
+void serialize_row(Row *source, void *destination) {
   // memcp copies n chars from src to dest.
   /* void *memcpy(void *dst, const void *src, size_t n) */
   // ^^ notice the `const void *src` syntax
@@ -76,13 +82,14 @@ void serialize_row(Row* source, void* destination) {
   memcpy(destination + EMAIL_OFFSET, &(source->email), EMAIL_SIZE);
 }
 
-void deserialize_row(void* source, Row* destination) {
+void deserialize_row(void *source, Row *destination) {
   memcpy(&(destination->id), source + ID_OFFSET, ID_SIZE);
   memcpy(&(destination->username), source + USERNAME_OFFSET, USERNAME_SIZE);
   memcpy(&(destination->email), source + EMAIL_OFFSET, EMAIL_SIZE);
 }
 
-// Table structure that points to pages of rows and keeps tracks of how many rows there are in prepare_statement
+// Table structure that points to pages of rows and keeps tracks of how many
+// rows there are in prepare_statement
 const uint32_t PAGE_SIZE = 4096;
 #define TABLE_MAX_PAGES 100
 const uint32_t ROWS_PER_PAGE = PAGE_SIZE / ROW_SIZE;
@@ -94,37 +101,39 @@ typedef struct {
 
 void print_prompt() { printf("db > "); }
 
-void remove_newline(InputBuffer* input_buffer, ssize_t bytes_read) {
+void remove_newline(InputBuffer *input_buffer, ssize_t bytes_read) {
   // removes the \n newline char after processing the input from the repl.
   // removes it from total length and deletes the \n character by replacing w 0.
   input_buffer->input_length = bytes_read - 1;
-  input_buffer ->buffer[bytes_read -1] = 0;
+  input_buffer->buffer[bytes_read - 1] = 0;
 }
 
-void read_input(InputBuffer* input_buffer) {
+void read_input(InputBuffer *input_buffer) {
   // getline reads a line from stream (in this case stdin)
   ssize_t bytes_read =
-    getline(&(input_buffer->buffer), &(input_buffer->buffer_length), stdin);
+      getline(&(input_buffer->buffer), &(input_buffer->buffer_length), stdin);
 
-    if (bytes_read <= 0) {
-      printf("Error reading input\n");
-      exit(EXIT_FAILURE);
-    }
+  if (bytes_read <= 0) {
+    printf("Error reading input\n");
+    exit(EXIT_FAILURE);
+  }
 
   remove_newline(input_buffer, bytes_read);
 }
 
-void close_input_buffer(InputBuffer* input_buffer) {
-  // we need to free `buffer` too because it was malloc'd by newline()'s first argument
+void close_input_buffer(InputBuffer *input_buffer) {
+  // we need to free `buffer` too because it was malloc'd by newline()'s first
+  // argument
   free(input_buffer->buffer);
   free(input_buffer);
 }
 
-InputBuffer* new_input_buffer() {
+InputBuffer *new_input_buffer() {
   // malloc assigns input_buffer to heap
-  // Needed here because otherwise the memory is freed after this function is called.
-  // But the way it is now, allows the setter to be its own function, rather than writing it in main()
-  InputBuffer* input_buffer = malloc(sizeof(InputBuffer));
+  // Needed here because otherwise the memory is freed after this function is
+  // called. But the way it is now, allows the setter to be its own function,
+  // rather than writing it in main()
+  InputBuffer *input_buffer = malloc(sizeof(InputBuffer));
   input_buffer->buffer = NULL;
   input_buffer->buffer_length = 0;
   input_buffer->input_length = 0;
@@ -132,7 +141,7 @@ InputBuffer* new_input_buffer() {
   return input_buffer;
 }
 
-MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
+MetaCommandResult do_meta_command(InputBuffer *input_buffer) {
   bool is_exit_command = strcmp(input_buffer->buffer, ".exit") == 0;
   if (is_exit_command) {
     close_input_buffer(input_buffer);
@@ -141,20 +150,17 @@ MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
   return META_COMMAND_UNRECOGNIZED_COMMAND;
 }
 
-PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement) {
+PrepareResult prepare_statement(InputBuffer *input_buffer, Statement *statement_ptr) {
   if (strcmp(input_buffer->buffer, "select") == 0) {
-    statement->type = STATEMENT_SELECT;
+    statement_ptr->type = STATEMENT_SELECT;
     return PREPARE_SUCCESS;
   }
   if (strncmp(input_buffer->buffer, "insert", 6) == 0) {
-    statement->type = STATEMENT_INSERT;
-    int args_assigned = sscanf(
-      input_buffer->buffer,
-      "insert %d %s %s",
-      &(statement->row_to_insert.id),
-      &(statement->row_to_insert.username),
-      &(statement->row_to_insert.email)
-    );
+    statement_ptr->type = STATEMENT_INSERT;
+    int args_assigned = sscanf(input_buffer->buffer, "insert %d %s %s",
+                               &(statement_ptr->row_to_insert.id),
+                               &(statement_ptr->row_to_insert.username),
+                               &(statement_ptr->row_to_insert.email));
     if (args_assigned < 3) {
       return PREPARE_SYNTAX_ERROR;
     }
@@ -164,19 +170,19 @@ PrepareResult prepare_statement(InputBuffer* input_buffer, Statement* statement)
   return PREPARE_UNRECOGNIZED_STATEMENT;
 }
 
-void execute_statement(Statement* statement) {
+void execute_statement(Statement *statement) {
   switch (statement->type) {
-    case (STATEMENT_SELECT):
-      printf("Selecting from database...\n");
-      break;
-    case (STATEMENT_INSERT):
-      printf("Inserting to database...\n");
-      break;
+  case (STATEMENT_SELECT):
+    printf("Selecting from database...\n");
+    break;
+  case (STATEMENT_INSERT):
+    printf("Inserting to database...\n");
+    break;
   }
 }
 
-int main(int argc, char** argv) {
-  InputBuffer* input_buffer = new_input_buffer();
+int main(int argc, char **argv) {
+  InputBuffer *input_buffer = new_input_buffer();
 
   // REPL
   while (true) {
@@ -186,26 +192,26 @@ int main(int argc, char** argv) {
     bool is_valid_meta_command = input_buffer->buffer[0] == '.';
     if (is_valid_meta_command) {
       switch (do_meta_command(input_buffer)) {
-        case (META_COMMAND_SUCCESS):
-          continue;
-        case (META_COMMAND_UNRECOGNIZED_COMMAND):
-          printf("Unrecognized command '%s'\n", input_buffer->buffer);
-          continue;
+      case (META_COMMAND_SUCCESS):
+        continue;
+      case (META_COMMAND_UNRECOGNIZED_COMMAND):
+        printf("Unrecognized command '%s'\n", input_buffer->buffer);
+        continue;
       }
     }
 
     // convert input to bytecode for sqlite to process as sql statement
     Statement statement;
-    // TODO why is it &statement and not *statement?
+    // reminder: &statement CREATES a pointer to statement (gets memory address)
     switch (prepare_statement(input_buffer, &statement)) {
-      case (PREPARE_SUCCESS):
-        break;
-      case (PREPARE_UNRECOGNIZED_STATEMENT):
-        printf("Unrecognized keyword at start of '%s' .\n", input_buffer->buffer);
-        continue;
-      default:
-        printf("Syntax error.");
-        break;
+    case (PREPARE_SUCCESS):
+      break;
+    case (PREPARE_UNRECOGNIZED_STATEMENT):
+      printf("Unrecognized keyword at start of '%s' .\n", input_buffer->buffer);
+      continue;
+    default:
+      printf("Syntax error.");
+      break;
     }
 
     execute_statement(&statement);
