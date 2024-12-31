@@ -133,7 +133,8 @@ InputBuffer* new_input_buffer() {
 }
 
 MetaCommandResult do_meta_command(InputBuffer* input_buffer) {
-  if (strcmp(input_buffer->buffer, ".exit") == 0) {
+  bool is_exit_command = strcmp(input_buffer->buffer, ".exit") == 0;
+  if (is_exit_command) {
     close_input_buffer(input_buffer);
     exit(EXIT_SUCCESS);
   }
@@ -182,7 +183,6 @@ int main(int argc, char** argv) {
     print_prompt();
     read_input(input_buffer);
 
-    // is valid meta command?
     bool is_valid_meta_command = input_buffer->buffer[0] == '.';
     if (is_valid_meta_command) {
       switch (do_meta_command(input_buffer)) {
