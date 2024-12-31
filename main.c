@@ -166,10 +166,40 @@ InputBuffer *new_input_buffer() {
   return input_buffer;
 }
 
-MetaCommandResult do_meta_command(InputBuffer *input_buffer) {
+Table *new_table() {
+  // allocate memory and cast Table pointer
+  //
+  // Explanation:
+  // malloc returns a generic pointer void*
+  // so `(Table*)malloc(sizeof(Table))` is saying,
+  // "the pointer of that address that we just allocated is of type Table"
+  Table *table = (Table *)malloc(sizeof(Table));
+
+  table->num_rows = 0;
+
+  // defensive programming:
+  // apparently good practice in C to instantiate null pointers
+  // bc it can end up being filled with whatever random memory values present in
+  // that memory location
+  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
+    table->pages[i] = NULL;
+  }
+  return table;
+}
+
+// cleanup table
+void free_table(Table *table) {
+  for (int i = 0; table->pages[i]; i++) {
+    free(table->pages[i]);
+  }
+  free(table);
+}
+
+MetaCommandResult do_meta_command(InputBuffer *input_buffer, Table *table) {
   bool is_exit_command = strcmp(input_buffer->buffer, ".exit") == 0;
   if (is_exit_command) {
     close_input_buffer(input_buffer);
+    free_table(table);
     exit(EXIT_SUCCESS);
   }
   return META_COMMAND_UNRECOGNIZED_COMMAND;
@@ -194,30 +224,6 @@ PrepareResult prepare_statement(InputBuffer *input_buffer,
 
   return PREPARE_UNRECOGNIZED_STATEMENT;
 }
-
-Table *new_table() {
-  // allocate memory and cast Table pointer
-  //
-  // Explanation:
-  // malloc returns a generic pointer void*
-  // so `(Table*)malloc(sizeof(Table))` is saying,
-  // "the pointer of that address that we just allocated is of type Table"
-  Table *table = (Table *)malloc(sizeof(Table));
-
-  table->num_rows = 0;
-
-  // defensive programming:
-  // apparently good practice in C to instantiate null pointers
-  // bc it can end up being filled with whatever random memory values present in
-  // that memory location
-  for (uint32_t i = 0; i < TABLE_MAX_PAGES; i++) {
-    table->pages[i] = NULL;
-  }
-  return table;
-}
-
-// cleanup table
-void free_table() {}
 
 // Figures out where to read/write a particular row in memory
 void *get_row_location(Table *table, uint32_t row_num) {
@@ -301,7 +307,7 @@ int main(int argc, char **argv) {
 
     bool is_valid_meta_command = input_buffer->buffer[0] == '.';
     if (is_valid_meta_command) {
-      switch (do_meta_command(input_buffer)) {
+      switch (do_meta_command(input_buffer, table)) {
       case (META_COMMAND_SUCCESS):
         continue;
       case (META_COMMAND_UNRECOGNIZED_COMMAND):
@@ -316,6 +322,9 @@ int main(int argc, char **argv) {
     switch (prepare_statement(input_buffer, &statement)) {
     case (PREPARE_SUCCESS):
       break;
+    case (PREPARE_SYNTAX_ERROR):
+      printf("Syntax error. Could not parse statement.\n");
+      continue;
     case (PREPARE_UNRECOGNIZED_STATEMENT):
       printf("Unrecognized keyword at start of '%s' .\n", input_buffer->buffer);
       continue;
