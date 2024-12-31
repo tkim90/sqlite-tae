@@ -31,8 +31,9 @@ typedef enum { STATEMENT_INSERT, STATEMENT_SELECT } StatementType;
 
 typedef struct {
   uint32_t id;
-  char username[COLUMN_USERNAME_SIZE];
-  char email[COLUMN_EMAIL_SIZE];
+  //+ 1 bc in C, strings supposed to end w null character
+  char username[COLUMN_USERNAME_SIZE + 1];
+  char email[COLUMN_EMAIL_SIZE + 1];
 } Row;
 
 typedef struct {
@@ -261,7 +262,7 @@ void *get_row_location(Table *table, uint32_t row_num) {
 }
 
 ExecuteResult execute_insert(Statement *statement, Table *table) {
-  if (table->num_rows >= TABLE_MAX_ROWS) {
+  if (table->num_rows == TABLE_MAX_ROWS) {
     return EXECUTE_TABLE_FULL;
   }
 
@@ -333,7 +334,13 @@ int main(int argc, char **argv) {
       break;
     }
 
-    execute_statement(&statement, table);
-    printf("Executed.\n");
+    switch (execute_statement(&statement, table)) {
+    case (EXECUTE_SUCCESS):
+      printf("Executed.\n");
+      break;
+    case (EXECUTE_TABLE_FULL):
+      printf("Error: Table full.\n");
+      break;
+    }
   }
 }
