@@ -183,7 +183,7 @@ PrepareResult prepare_statement(InputBuffer *input_buffer,
 }
 
 // Figures out where to read/write a particular row in memory
-void *row_slot(Table *table, uint32_t row_num) {
+void *get_row_location(Table *table, uint32_t row_num) {
   // Calculate which page contains this row
   uint32_t page_num = row_num / ROWS_PER_PAGE;
 
@@ -224,7 +224,7 @@ ExecuteResult execute_insert(Statement *statement, Table *table) {
 
   Row *row_to_insert = &(statement->row_to_insert);
 
-  serialize_row(row_to_insert, row_slot(table, table->num_rows));
+  serialize_row(row_to_insert, get_row_location(table, table->num_rows));
   table->num_rows += 1;
 
   return EXECUTE_SUCCESS;
